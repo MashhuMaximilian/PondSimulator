@@ -4,7 +4,6 @@ using Unity.Mathematics;
 using Unity.Collections;
 using LakeBacteria.Components;
 
-
 public class FoodConfigAuthoring : MonoBehaviour
 {
     [Header("Spawning")]
@@ -25,6 +24,10 @@ public class FoodConfigAuthoring : MonoBehaviour
     public float ClusterDensity = 100f;
     public Vector2 LifespanRange = new Vector2(20f, 40f);
 
+    [Header("Food Settings")]
+    [Tooltip("Override radius for spawned food prefab")]
+    public float SpawnedFoodRadius = 0.01f;
+
     class Baker : Baker<FoodConfigAuthoring>
     {
         public override void Bake(FoodConfigAuthoring authoring)
@@ -43,6 +46,8 @@ public class FoodConfigAuthoring : MonoBehaviour
             {
                 Debug.LogError("FoodPrefab is not assigned in FoodConfigAuthoring.");
             }
+
+            // Include the override radius in the configuration component.
             AddComponent(entity, new FoodSpawningConfig
             {
                 FoodPrefabName = authoring.FoodPrefabName,
@@ -53,7 +58,8 @@ public class FoodConfigAuthoring : MonoBehaviour
                 HotspotDensity = authoring.HotspotDensity,
                 ClusterDensity = authoring.ClusterDensity,
                 LifespanRange = new float2(authoring.LifespanRange.x, authoring.LifespanRange.y),
-                PrefabEntity = prefabEntity // This is provided for legacy use; you will actually use FoodTypeConfig
+                SpawnedFoodRadius = authoring.SpawnedFoodRadius, // <-- New field!
+                PrefabEntity = prefabEntity // For legacy use; new code uses FoodTypeConfig.
             });
         }
     }

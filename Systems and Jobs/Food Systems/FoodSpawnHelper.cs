@@ -29,6 +29,8 @@ public static class FoodSpawnHelper
             Position = position,
             Rotation = quaternion.identity,
             Scale = radius
+
+
         });
         ecb.SetComponent(sortKey, food, new FoodData
         {

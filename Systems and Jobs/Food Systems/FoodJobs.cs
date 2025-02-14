@@ -7,10 +7,10 @@ using Unity.Mathematics;
 using Unity.Transforms;
 
 
+
 [BurstCompile]
 public struct SpawnFoodJob : IJobParallelFor
 {
-
     public EntityCommandBuffer.ParallelWriter ECB;
     public float3 SpawnArea;
     public float2 LifespanRange;
@@ -20,12 +20,12 @@ public struct SpawnFoodJob : IJobParallelFor
     public float HotspotRadius;
     public float HotspotDensity;
     public float ClusterDensity;
+    public float DefaultRadius;
 
     public void Execute(int index)
     {
         var random = new Unity.Mathematics.Random(Seed + (uint)index);
         float3 position;
-
         if (Hotspots.Length > 0 && random.NextFloat() < HotspotDensity)
         {
             int hotspotIndex = random.NextInt(0, Hotspots.Length);
@@ -35,7 +35,7 @@ public struct SpawnFoodJob : IJobParallelFor
                 ref hotspotCenter,
                 HotspotRadius,
                 ClusterDensity,
-                1f, // Assuming default radius, adjust as needed
+                DefaultRadius,
                 out position
             );
         }
@@ -45,7 +45,7 @@ public struct SpawnFoodJob : IJobParallelFor
         }
 
         float lifespan = random.NextFloat(LifespanRange.x, LifespanRange.y);
-        FoodSpawnHelper.SpawnFood(ECB, index, FoodPrefabEntity, position, 1f, 10f, lifespan, LifespanRange);
+        FoodSpawnHelper.SpawnFood(ECB, index, FoodPrefabEntity, position, DefaultRadius, 10f, lifespan, LifespanRange);
     }
 }
 
@@ -80,7 +80,6 @@ public partial struct MovementJob : IJobEntity
 
     public void Execute(ref LocalTransform transform, in FoodData food)
     {
-        float3 noiseInput = transform.Position * 0.1f;
         float3 noiseOffset = new float3(
             noise.snoise(new float2(Time, transform.Position.y)),
             noise.snoise(new float2(transform.Position.x, transform.Position.z)),
@@ -91,3 +90,5 @@ public partial struct MovementJob : IJobEntity
         transform.Position = math.clamp(transform.Position, -SpawnArea / 2, SpawnArea / 2);
     }
 }
+
+

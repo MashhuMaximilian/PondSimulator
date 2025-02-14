@@ -14,6 +14,7 @@ public struct FoodSpawningConfig : IComponentData
     public int SpawnedFoodUnits;
     public int InitialSpawnedCount;
     public float2 LifespanRange;
+    public float SpawnedFoodRadius; // <-- New field for the runtime override.
     public Entity PrefabEntity; // legacy field; we use FoodTypeConfig for runtime
 }
 

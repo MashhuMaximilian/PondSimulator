@@ -1,22 +1,22 @@
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
-using Unity.Jobs;           // For IJobParallelFor scheduling
+using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Transforms;
 using UnityEngine;
 
-
-
-// FoodLifecycleSystem.cs
 [UpdateInGroup(typeof(SimulationSystemGroup))]
 public partial class FoodLifecycleSystem : SystemBase
 {
+    private EndSimulationEntityCommandBufferSystem _endSimulationECBSystem;
     private EntityQuery _foodQuery;
     private bool _hasInitialSpawned;
-    // private SimulationConfig _simulationConfig;
 
     protected override void OnCreate()
     {
+        // Get the managed ECB system.
+        _endSimulationECBSystem = World.GetOrCreateSystemManaged<EndSimulationEntityCommandBufferSystem>();
         _foodQuery = GetEntityQuery(ComponentType.ReadOnly<FoodTag>(), ComponentType.ReadOnly<FoodData>());
         RequireForUpdate<FoodSpawningConfig>();
         RequireForUpdate<FoodTypeConfig>();
@@ -31,15 +31,19 @@ public partial class FoodLifecycleSystem : SystemBase
         var configs = GetConfigurations();
         float scaledDeltaTime = SystemAPI.Time.DeltaTime * configs.simulation.tickSpeed;
 
-        using (var ecb = new EntityCommandBuffer(Allocator.TempJob))
-        {
-            if (!_hasInitialSpawned)
-            {
-                HandleInitialSpawning(configs.spawn, configs.type, ecb);
-            }
+        // Use the ECB from the EndSimulationEntityCommandBufferSystem.
+        var commandBuffer = _endSimulationECBSystem.CreateCommandBuffer().AsParallelWriter();
 
-            HandleFoodLifecycle(scaledDeltaTime, ecb);
+        if (!_hasInitialSpawned)
+        {
+            HandleInitialSpawning(configs.spawn, configs.type, commandBuffer);
+            _hasInitialSpawned = true;
         }
+
+        HandleFoodLifecycle(scaledDeltaTime, commandBuffer);
+
+        // Make sure the ECB system waits for our jobs.
+        _endSimulationECBSystem.AddJobHandleForProducer(Dependency);
     }
 
     private bool ValidateRequiredSingletons()
@@ -63,24 +67,24 @@ public partial class FoodLifecycleSystem : SystemBase
         );
     }
 
-    private void HandleInitialSpawning(FoodSpawningConfig spawnConfig, FoodTypeConfig typeConfig, EntityCommandBuffer ecb)
+    private void HandleInitialSpawning(FoodSpawningConfig spawnConfig, FoodTypeConfig typeConfig, EntityCommandBuffer.ParallelWriter commandBuffer)
     {
         int spawnCount = math.max(0, spawnConfig.SpawnedFoodUnits - _foodQuery.CalculateEntityCount());
         if (spawnCount > 0)
         {
-            SpawnInitialFood(spawnCount, spawnConfig, typeConfig, ecb);
-            _hasInitialSpawned = true;
+            SpawnInitialFood(spawnCount, spawnConfig, typeConfig, commandBuffer);
         }
     }
 
-    private void SpawnInitialFood(int spawnCount, FoodSpawningConfig spawnConfig, FoodTypeConfig typeConfig, EntityCommandBuffer ecb)
+    private void SpawnInitialFood(int spawnCount, FoodSpawningConfig spawnConfig, FoodTypeConfig typeConfig, EntityCommandBuffer.ParallelWriter commandBuffer)
     {
         uint seed = (uint)(SystemAPI.Time.ElapsedTime * 1000 + 1);
-        var hotspots = CreateHotspots(spawnConfig);
+        NativeArray<float3> hotspots = CreateHotspots(spawnConfig);
+        float defaultRadius = spawnConfig.SpawnedFoodRadius;
 
         var spawnJob = new SpawnFoodJob
         {
-            ECB = ecb.AsParallelWriter(),
+            ECB = commandBuffer,
             SpawnArea = spawnConfig.SpawnArea,
             LifespanRange = spawnConfig.LifespanRange,
             Seed = seed,
@@ -88,51 +92,38 @@ public partial class FoodLifecycleSystem : SystemBase
             Hotspots = hotspots,
             HotspotRadius = spawnConfig.HotspotRadius,
             HotspotDensity = spawnConfig.HotspotDensity,
-            ClusterDensity = spawnConfig.ClusterDensity
+            ClusterDensity = spawnConfig.ClusterDensity,
+            DefaultRadius = defaultRadius
         };
 
         Dependency = spawnJob.Schedule(spawnCount, 64, Dependency);
-        Dependency.Complete();
-
-        if (hotspots.IsCreated) hotspots.Dispose();
+        Dependency = hotspots.Dispose(Dependency);
     }
 
     private NativeArray<float3> CreateHotspots(FoodSpawningConfig config)
     {
-        if (config.HotspotCount <= 0) return default;
-
-        var hotspots = new NativeArray<float3>(config.HotspotCount, Allocator.TempJob);
-        var random = new Unity.Mathematics.Random((uint)SystemAPI.Time.ElapsedTime + 1);
-
-        for (int i = 0; i < config.HotspotCount; i++)
+        int count = config.HotspotCount > 0 ? config.HotspotCount : 0;
+        var hotspots = new NativeArray<float3>(count, Allocator.TempJob);
+        if (count > 0)
         {
-            hotspots[i] = random.NextFloat3(-config.SpawnArea / 2, config.SpawnArea / 2);
+            var random = new Unity.Mathematics.Random((uint)SystemAPI.Time.ElapsedTime + 1);
+            for (int i = 0; i < count; i++)
+            {
+                hotspots[i] = random.NextFloat3(-config.SpawnArea / 2, config.SpawnArea / 2);
+            }
         }
-
         return hotspots;
     }
 
-    private void HandleFoodLifecycle(float scaledDeltaTime, EntityCommandBuffer ecb)
+    private void HandleFoodLifecycle(float scaledDeltaTime, EntityCommandBuffer.ParallelWriter commandBuffer)
     {
-        var decayCounter = new NativeCounter(Allocator.TempJob);
-        try
-        {
-            ScheduleLifecycleJobs(scaledDeltaTime, ecb, decayCounter);
-            Dependency.Complete();
-            ecb.Playback(EntityManager);
-        }
-        finally
-        {
-            decayCounter.Dispose();
-        }
-    }
+        // Allocate a NativeCounter for decay counting.
+        NativeCounter decayCounter = new NativeCounter(Allocator.TempJob);
 
-    private void ScheduleLifecycleJobs(float scaledDeltaTime, EntityCommandBuffer ecb, NativeCounter decayCounter)
-    {
         var decayJob = new DecayJob
         {
             DeltaTime = scaledDeltaTime,
-            ECB = ecb.AsParallelWriter(),
+            ECB = commandBuffer,
             DecayCounter = decayCounter.AsParallelWriter()
         };
         Dependency = decayJob.ScheduleParallel(Dependency);
@@ -144,5 +135,8 @@ public partial class FoodLifecycleSystem : SystemBase
             SpawnArea = SystemAPI.GetSingleton<FoodSpawningConfig>().SpawnArea
         };
         Dependency = movementJob.ScheduleParallel(Dependency);
+
+        // Schedule disposal of the decay counter once jobs are complete.
+        Dependency = decayCounter.Dispose(Dependency);
     }
 }

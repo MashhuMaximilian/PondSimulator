@@ -36,5 +36,4 @@ public static class BacteriaVisuals
         };
     }
 
-    // In the future, add functions for changing colors, shaders, etc.
 }

@@ -12,20 +12,19 @@ public class FoodAuthoring : MonoBehaviour
     public float Lifespan = 30f;
     public Vector2 LifespanRange = new Vector2(20f, 40f);
 
-
     class Baker : Baker<FoodAuthoring>
     {
         public override void Bake(FoodAuthoring authoring)
         {
-            // Adjust the GameObject's scale before conversion
+            // Adjust the GameObject's scale before conversion.
             authoring.gameObject.transform.localScale = Vector3.one * authoring.Radius;
 
-            // Proceed with entity creation
+            // Create the entity.
             Entity entity = GetEntity(TransformUsageFlags.Dynamic);
             AddComponent<FoodPrefabComponent>(entity);
             AddComponent(entity, new Prefab());
 
-            // Add components (no longer attempt to set LocalTransform)
+            // Set up food data.
             AddComponent(entity, new FoodData
             {
                 Energy = authoring.Energy,
@@ -34,10 +33,9 @@ public class FoodAuthoring : MonoBehaviour
                 LifespanRange = new float2(authoring.LifespanRange.x, authoring.LifespanRange.y),
                 Age = 0f
             });
-
             AddComponent<FoodTag>(entity);
 
-            // Add rendering data
+            // Add rendering data.
             var mesh = authoring.GetComponent<MeshFilter>().sharedMesh;
             var material = authoring.GetComponent<MeshRenderer>().sharedMaterial;
             AddSharedComponentManaged(entity, new RenderMeshArray(new[] { material }, new[] { mesh }));

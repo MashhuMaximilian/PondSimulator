@@ -1,6 +1,6 @@
 using Unity.Entities;
 using UnityEngine;
-using LakeBacteria.Components;
+// using LakeBacteria.Components;
 
 
 public class EntityLinkWrapper : MonoBehaviour
@@ -13,7 +13,7 @@ public class EntityLinkWrapper : MonoBehaviour
         {
             var entity = GetEntity(TransformUsageFlags.Dynamic);
             AddComponentObject(entity, authoring);
-            Debug.Log($"Prefab entities: {BacteriaData.ShapeType.Bacillus}, {BacteriaData.ShapeType.Coccus}, {BacteriaData.ShapeType.Spiral}, {BacteriaData.ShapeType.Vibrio}, {BacteriaData.ShapeType.YShape}");
+            // Debug.Log($"Prefab entities: {BacteriaData.ShapeType.Bacillus}, {BacteriaData.ShapeType.Coccus}, {BacteriaData.ShapeType.Spiral}, {BacteriaData.ShapeType.Vibrio}, {BacteriaData.ShapeType.YShape}");
             authoring.Entity = entity;
         }
     }

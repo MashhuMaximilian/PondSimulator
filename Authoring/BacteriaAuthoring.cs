@@ -7,6 +7,7 @@ using LakeBacteria.Components;
 using Unity.Rendering; // Now using RenderMeshArray from com.unity.entities.graphics@1.3
 using UnityEngine.Rendering;
 
+
 public class BacteriaAuthoring : MonoBehaviour
 {
     [Header("Genes")]
@@ -26,7 +27,7 @@ public class BacteriaAuthoring : MonoBehaviour
         {
             // Get the entity for this GameObject (using dynamic transform)
             Entity entity = GetEntity(TransformUsageFlags.Dynamic);
-            Debug.Log($"Baking bacteria prefab for {authoring.gameObject.name}, Entity: {entity}");
+            // Debug.Log($"Baking bacteria prefab for {authoring.gameObject.name}, Entity: {entity}");
 
             // Mark this as a bacteria prefab and add the ECS Prefab component.
             AddComponent<BacteriaPrefabComponent>(entity);
@@ -44,7 +45,7 @@ public class BacteriaAuthoring : MonoBehaviour
                 AggressionBias = Mathf.Clamp(authoring.AggressionBias, 0.0f, 1.0f),
                 ClusterPreference = Mathf.Clamp(authoring.ClusterPreference, 0.0f, 1.0f),
                 MutationRate = Mathf.Clamp(authoring.MutationRate, 0.0f, 1.0f),
-                shapeType = BacteriaData.ShapeType.Bacillus // Default shape
+                shapeType = BacteriaData.ShapeType.Coccus // Default shape
             });
 
             AddComponent(entity, new Energy { Value = 100f });
@@ -52,6 +53,18 @@ public class BacteriaAuthoring : MonoBehaviour
 
             // Retrieve mesh and material from the GameObject.
             var mesh = authoring.GetComponent<MeshFilter>()?.sharedMesh;
+            if (mesh != null)
+            {
+                mesh.RecalculateBounds(); // Ensure correct bounds
+                Bounds adjustedBounds = mesh.bounds;
+
+                // Expand bounds to avoid culling issues
+                adjustedBounds.Expand(100.0f); // Increase this factor if needed
+                mesh.bounds = adjustedBounds;
+
+                // Debug.Log($"{authoring.gameObject.name} recalculated bounds: {mesh.bounds}");
+            }
+
             var material = authoring.GetComponent<MeshRenderer>()?.sharedMaterial;
             if (mesh != null && material != null)
             {
@@ -61,7 +74,7 @@ public class BacteriaAuthoring : MonoBehaviour
                     materials: new Material[] { material }
                 );
                 AddSharedComponentManaged(entity, renderMeshArray);
-                Debug.Log($"RenderMeshArray assigned to {authoring.gameObject.name}, Entity: {entity}");
+                // Debug.Log($"RenderMeshArray assigned to {authoring.gameObject.name}, Entity: {entity}");
 
             }
             else
@@ -74,7 +87,7 @@ public class BacteriaAuthoring : MonoBehaviour
             if (linkWrapper != null)
             {
                 linkWrapper.Entity = entity;
-                Debug.Log($"EntityLinkWrapper assigned to {authoring.gameObject.name}: Entity: {entity}");
+                // Debug.Log($"EntityLinkWrapper assigned to {authoring.gameObject.name}: Entity: {entity}");
 
             }
             else
